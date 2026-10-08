@@ -1,0 +1,25 @@
+[gd_scene format=3 uid="uid://bbq755tr4joj4"]
+
+[ext_resource type="Script" uid="uid://iieudmy1p707" path="res://spike.gd" id="1_7k7bx"]
+[ext_resource type="Texture2D" uid="uid://dr7o2bd5ryj55" path="res://resources/world_tileset.png" id="2_5sso0"]
+[ext_resource type="Script" uid="uid://n7g28og8ulv3" path="res://scripts/TagComponent.gd" id="2_tggh8"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_tggh8"]
+size = Vector2(8, 14)
+
+[node name="spike" type="Area2D" unique_id=1394898450]
+script = ExtResource("1_7k7bx")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1730197743]
+position = Vector2(0, -8)
+texture = ExtResource("2_5sso0")
+region_enabled = true
+region_rect = Rect2(0, 112, 16, 16)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=283513751]
+position = Vector2(0, -7)
+shape = SubResource("RectangleShape2D_tggh8")
+
+[node name="TagComponent" type="Node" parent="." unique_id=450057424]
+script = ExtResource("2_tggh8")
+metadata/_custom_type_script = "uid://n7g28og8ulv3"
