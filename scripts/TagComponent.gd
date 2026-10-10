@@ -1,6 +1,6 @@
 # TagComponent.gd
 extends Node
-class_name TagComponent
+class_name TagComponent #物品标签
 
 var tags: Array[String] = []
 
