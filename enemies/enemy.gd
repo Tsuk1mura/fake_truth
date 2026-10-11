@@ -21,6 +21,14 @@ var default_gravity := ProjectSettings.get("physics/2d/default_gravity") as floa
 @onready var state_machine: StateMachine = $StateMachine
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
 @onready var stats: Stats = $Stats
+@onready var tags: TagComponent = $TagComponent
+
+
+## 敌人的碰撞层/掩码在 enemy.tscn 里手配（layer 16 RealEnemy / mask 3），
+## 故意不挂 BodyMasker：BodyMasker 会在找不到身份标签时改写碰撞，
+## 而敌人的身份永远不变，不需要那套动态机制。
+func _ready() -> void:
+	tags.add_tag("real_alive")   # ★ 让地刺能对所有"活着的现实生物"生效
 
 
 

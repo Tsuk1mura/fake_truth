@@ -583,11 +583,12 @@ region_rect = Rect2(48, 0, 48, 24)
 [node name="WallChecker" type="RayCast2D" parent="Graphics" parent_id_path=PackedInt32Array(1509638856) index="1" unique_id=1490104589]
 position = Vector2(-1, -8)
 target_position = Vector2(-8, 0)
+collision_mask = 1
 
 [node name="PlayerChecker" type="RayCast2D" parent="Graphics" parent_id_path=PackedInt32Array(1509638856) index="2" unique_id=1599496060]
 position = Vector2(-1, -8)
 target_position = Vector2(-94, 0)
-collision_mask = 5
+collision_mask = 4
 
 [node name="FloorChecker" type="RayCast2D" parent="Graphics" parent_id_path=PackedInt32Array(1509638856) index="3" unique_id=436641813]
 position = Vector2(-10, -1)

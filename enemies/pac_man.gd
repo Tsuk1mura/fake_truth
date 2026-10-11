@@ -20,7 +20,13 @@ var pending_damage: Damage
 func can_see_player() -> bool:
 	if not player_checker.is_colliding():
 		return false
-	return player_checker.get_collider() is Player
+	var other := player_checker.get_collider()
+	if other == null:
+		return false
+	var t = other.get_node_or_null("TagComponent")
+	if t == null:
+		return false
+	return t.has_tag("real_player")
 
 func tick_physics(state:State, delta:float) -> void:
 	match state:
