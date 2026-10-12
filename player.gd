@@ -23,13 +23,13 @@ const KNOCKBACK_AMOUNT := 512.0 #击飞
 const CORPSE_SCENE := preload("res://corpse.tscn")
 const DEAD_TINT := Color(0.0, 81.0 / 255.0, 1.0, 1.0)
 const ALIVE_TINT := Color.WHITE
-const PUSH_GAIN := 3.0        # 推力增益：玩家速度 × 这个系数
-const PUSH_MIN_SPEED := 5.0 
+const PUSH_GAIN := 3.0        # 推力增益：意图速度 × 这个系数
 
 var default_gravity := ProjectSettings.get("physics/2d/default_gravity") as float
 var is_first_tick := false
 var pending_damage: Damage
 var _is_dead := false
+var held_item: Node2D = null   # 手里拿着的可扔物品（null = 空手）
 
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
 @onready var coyote_timer: Timer = $CoyoteTimer #郊狼时间
@@ -40,45 +40,91 @@ var _is_dead := false
 @onready var state_machine: StateMachine = $StateMachine
 @onready var tags: TagComponent = $TagComponent
 @onready var push_area: Area2D = $Graphics/PushArea
+@onready var grab_area: Area2D = $Graphics/GrabArea   # 拾取感应区
+@onready var hand: Node2D = $Graphics/Hand            # 手的位置，拿东西挂这里
 
 func _ready() -> void:
 	tags.add_tag("real_player")
 	tags.add_tag("real_alive")
+
+	# 判定盒各自有身份标签，BodyMasker 会据此管理它们的碰撞层和世界可见性。
+	# 受击盒跟着玩家形态走：灵魂态时切到 dead_hurtbox（只有灵魂世界能打到我）。
+	var hb_tags: TagComponent = $Graphics/Hurtbox/TagComponent
+	hb_tags.add_tag("real_hurtbox")
+
+	# ★ 推不是"推尸体"，而是"对同世界的物品施加力"。
+	#   所以这个判定区是通用身份 body_sensor（物品感应区），
+	#   以后尸体、灯、箱子都在这条规则里，不需要改代码。
+	(push_area.get_node("TagComponent") as TagComponent).add_tag("body_sensor")
+
+	# 拾取感应区：只感应"物品"（item_sensor），谁有 grab() 谁就能被捡。
+	(grab_area.get_node("TagComponent") as TagComponent).add_tag("item_sensor")
+
 	push_area.body_entered.connect(_on_push_body_entered)
 
 
 func _on_push_body_entered(body: Node2D) -> void:
-	push_body(body, 1.0 / 60.0)
+	# 撞上的那一瞬间补一记，手感上"顶得动"
+	apply_push(body, 1.0 / 60.0)
 
 func _physics_process(delta: float) -> void:
+	# monitoring 关闭时查询重叠会报错（世界切换的瞬间会短暂关闭）
+	if not push_area.monitoring:
+		return
+	# 持续推：贴在物品上时每帧按当前速度施力
 	for body in push_area.get_overlapping_bodies():
-		push_body(body, delta)
+		apply_push(body, delta)
 
-func push_body(body: Node2D, delta: float) -> void:
-	if not body is RigidBody2D:
-		return
 
-	var t = body.get_node_or_null("TagComponent")
-	if t == null:
-		return
+## ★ 通用规则：对"同世界可推动的东西"施加力，力的大小正比于施加者的意图速度。
+##
+## 推谁不在这里判断 —— 判定区的 BodyMasker 已经按标签决定了它能碰到谁（物品+生物）。
+## 这里只做一件事：把接触到的物体按玩家想去的方向推开。
+## 以后灵魂态推虚类石头、贪吃兽撞飞东西，复用同一套即可。
+func apply_push(body: Node2D, delta: float) -> void:
+	# ★ 推的驱动力是"意图方向"（玩家想往哪走），不是"实际速度"。
+	#   撞上物体时 move_and_slide 会把 velocity.x 清零，
+	#   用实际速度判断会得出"被挡着→速度为零→没推力"的错误结论。
+	var direction := Input.get_axis("move_left", "move_right")
+	if is_zero_approx(direction):
+		return          # 站着不动就没有推力（这是设计，不是缺陷）
 
-	# ★ 标签驱动：只能推动"和自己同世界"的身体。
-	# 注意要用正向判断（必须是 real_player 才能推 real_body），
-	# 不能用 `if real_player else dead_body` —— 那样死亡形态(dead_player)
-	# 会去推 dead_body，而目前尸体永远只有 real_body 标签，
-	# 结果是"死亡形态能推、活着的形态推不动"，完全反了。
-	if not tags.has_tag("real_player"):
-		return
-	if not t.has_tag("real_body"):
-		return
+	# direction 自带正负号，力的方向自动正确，不需要算"谁在左边"
+	var force := direction * RUN_SPEED * PUSH_GAIN * delta
 
-	# ★ 核心：推力正比于当前水平速度
-	var speed := velocity.x
-	if absf(speed) < PUSH_MIN_SPEED:
-		return
+	# ★ 唯一规则：谁有 push() 谁就能被推，不判断它是什么类型。
+	#   刚体（尸体/箱子）在自己的 push() 里叫醒 + apply_central_impulse；
+	#   生物（小怪）在自己的 push() 里用残余速度表达被顶一下。
+	#   以后新增可推的东西，只要实现 push()，就自动落进这条规则。
+	if body.has_method("push"):
+		body.push(Vector2(force, 0.0))
 
-	# speed 自带正负号，方向不需要另外算
-	body.apply_central_impulse(Vector2(speed * PUSH_GAIN * delta, 0.0))
+
+## 拾取：从感应区里找一个"有 grab() 能力"的物品拿起来。
+## 捡谁不在这里判断 —— 感应区按 item_sensor 标签只碰到物品，
+## 这里只看它有没有 grab() 这个能力。和 push 同一套"方法即能力"的规则。
+func _try_grab() -> void:
+	if not grab_area.monitoring:
+		return
+	for body in grab_area.get_overlapping_bodies():
+		if body.has_method("grab"):
+			held_item = body
+			body.grab(self, hand)
+			return
+
+func _throw_held_item() -> void:
+	if held_item == null:
+		return
+	var dir := Vector2(graphics.scale.x, 0.0)   # 朝面朝的方向扔
+	held_item.throw(dir)
+	held_item = null
+
+## 掉落：死亡等场景下，把手里东西放回世界（不产生冲量）
+func _drop_held_item() -> void:
+	if held_item == null:
+		return
+	held_item.drop()
+	held_item = null
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -86,8 +132,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		jump_request_timer.start()
 	if event.is_action_released("jump") and velocity.y < JUMP_VELOCITY / 3:
 		velocity.y = JUMP_VELOCITY / 3 
-	if event.is_action_pressed("restart"):   
-		revive_at(GameState.spawn_position)
+	if event.is_action_pressed("restart"):
+		revive_at()   # 原地复活；以后接复活点时改成 revive_at(复活点位置)
+	if event.is_action_pressed("grab"):
+		if held_item:
+			_throw_held_item()
+		else:
+			_try_grab()
 
 func tick_physics(state:State, delta: float) -> void: #每帧做的事
 	if invincible_timer.time_left > 0:
@@ -154,6 +205,7 @@ func die() -> void:
 		_true_death()
 
 func _first_death() -> void:
+	_drop_held_item()   # 死的时候手里东西先掉回世界，不跟着进灵魂
 	_spawn_corpse()
 	_enter_dead_form()
 	stats.reset()                                  
@@ -167,23 +219,31 @@ func _true_death() -> void:
 
 func _spawn_corpse() -> void:
 	var corpse := CORPSE_SCENE.instantiate()
-	# ★ 必须先设位置再 add_child：add_child 会同步跑完 corpse._ready()
+	# 玩家的原点在脚底，尸体的碰撞盒底边在 origin + 8，所以尸体要往上放 8px 才能躺在地面上
 	corpse.global_position = global_position + Vector2(0, -8)
 	corpse.rotation = 0.0
-	# ★ 绝对不要把玩家的 collision_layer / collision_mask 复制给尸体！
-	# 尸体的层由它自己的 real_body 标签 + BodyMasker 决定（layer 256 / mask 785）。
-	# 复制玩家的层会让尸体变成"第二个玩家"，同时覆盖掉 BodyMasker 的配置。
-	get_parent().add_child(corpse)
+	# ★ 用 call_deferred 入树：die() 可能是在物理回调里被调用的
+	#   （地刺的 body_entered 就是），那时往场景树里塞刚体会触发
+	#   "Can't change this state while flushing queries" 一类的物理服务器报错。
+	#   尸体的碰撞层由它自己的 real_body 标签决定，不要复制玩家的层。
+	get_parent().add_child.call_deferred(corpse)
 
 func _enter_dead_form() -> void:
 	var t := graphics.modulate
 	graphics.modulate = Color(DEAD_TINT.r, DEAD_TINT.g, DEAD_TINT.b, t.a)
 
-	# 换身份：BodyMasker 监听到 tags_changed 会自动把层切到 DeathPlayer
+	# 换身份。BodyMasker 监听到 tags_changed 会自动完成全部后续：
+	#   碰撞层 RealPlayer -> DeathPlayer
+	#   在当前世界（死亡世界）可见
+	# 受击盒也要跟着换世界，否则灵魂世界里的玩家会被实体世界的怪打到
 	tags.remove_tag("real_player")
 	tags.remove_tag("real_alive")
 	tags.add_tag("dead_player")
-	
+
+	var hb_tags: TagComponent = $Graphics/Hurtbox/TagComponent
+	hb_tags.remove_tag("real_hurtbox")
+	hb_tags.add_tag("dead_hurtbox")
+
 	GameState.set_world(GameState.World.VIRTUAL)
 
 ## 当前形态的"闲置态"是哪个
@@ -309,13 +369,18 @@ func transition_state(from:State, to:State) -> void: #状态改变：from，to
 	is_first_tick = true
 
 
-func _on_hurtbox_hurt(hitbox: Hitbox) -> void:
+## 统一的受伤入口：小怪 hitbox、地刺都走这里。
+## 只记录 pending_damage，真正的扣血、击飞、死亡动画由状态机在 HURT/DYING 里处理。
+func apply_damage(amount: int, source: Node2D) -> void:
 	if invincible_timer.time_left > 0:
 		return
-	
 	pending_damage = Damage.new()
-	pending_damage.amount = 1
-	pending_damage.source = hitbox.owner
+	pending_damage.amount = amount
+	pending_damage.source = source
+
+
+func _on_hurtbox_hurt(hitbox: Hitbox) -> void:
+	apply_damage(1, hitbox.owner)
 
 
 #复活函数
@@ -324,10 +389,14 @@ func revive_at(pos: Vector2 = global_position) -> void:
 	if not tags.has_tag("dead_player"):
 		return
 
-	# 2) 换身份标签（BodyMasker 自动把层切回 RealPlayer）
+	# 2) 换身份标签（BodyMasker 自动把层切回 RealPlayer 并恢复可见）
 	tags.remove_tag("dead_player")
 	tags.add_tag("real_player")
 	tags.add_tag("real_alive")           # ★ 重新变回"活着的现实生物"
+
+	var hb_tags: TagComponent = $Graphics/Hurtbox/TagComponent
+	hb_tags.remove_tag("dead_hurtbox")
+	hb_tags.add_tag("real_hurtbox")
 
 	# 3) 恢复视觉
 	var t := graphics.modulate

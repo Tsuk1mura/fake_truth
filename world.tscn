@@ -9,6 +9,7 @@
 [ext_resource type="Texture2D" uid="uid://c43hghmyqyvrd" path="res://resources/new_resources/tileset_death.png" id="5_ioo17"]
 [ext_resource type="PackedScene" uid="uid://b6nqh4apbhe2f" path="res://enemies/pac_man.tscn" id="6_dwbse"]
 [ext_resource type="PackedScene" uid="uid://dcnspjybw3ots" path="res://corpse.tscn" id="9_ioo17"]
+[ext_resource type="PackedScene" uid="uid://km0edyffgkua" path="res://Rock.tscn" id="10_rock1"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_wse8f"]
 texture = ExtResource("2_gbfbk")
@@ -22,6 +23,7 @@ texture = ExtResource("1_f3sb7")
 
 [sub_resource type="TileSet" id="TileSet_k3n1d"]
 physics_layer_0/collision_layer = 1
+physics_layer_0/collision_mask = 1284
 sources/0 = SubResource("TileSetAtlasSource_wse8f")
 sources/1 = SubResource("TileSetAtlasSource_ic0uy")
 
@@ -45,7 +47,7 @@ texture = ExtResource("5_ioo17")
 
 [sub_resource type="TileSet" id="TileSet_036b0"]
 physics_layer_0/collision_layer = 2
-physics_layer_0/collision_mask = 2
+physics_layer_0/collision_mask = 2568
 sources/0 = SubResource("TileSetAtlasSource_aqk2v")
 sources/1 = SubResource("TileSetAtlasSource_2o6r5")
 
@@ -82,7 +84,9 @@ position = Vector2(280, 162)
 
 [node name="PacMan" parent="." unique_id=1163602713 instance=ExtResource("6_dwbse")]
 position = Vector2(400, 94)
-collision_mask = 13
 
 [node name="corpse" parent="." unique_id=824268797 instance=ExtResource("9_ioo17")]
-position = Vector2(626, 75)
+position = Vector2(626, 160)
+
+[node name="rock" parent="." unique_id=824268798 instance=ExtResource("10_rock1")]
+position = Vector2(320, 120)

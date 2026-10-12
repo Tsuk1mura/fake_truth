@@ -6,11 +6,11 @@
 [ext_resource type="Script" uid="uid://dwpgmqirqc4rs" path="res://scripts/BodyMasker.gd" id="4_dnttv"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_rst2x"]
-size = Vector2(16, 12)
+size = Vector2(16, 10)
 
 [node name="corpse" type="RigidBody2D" unique_id=824268797]
 collision_layer = 256
-collision_mask = 785
+collision_mask = 1285
 linear_damp = 4.0
 script = ExtResource("1_sda0q")
 
@@ -21,7 +21,7 @@ region_enabled = true
 region_rect = Rect2(96, 220, 32, 32)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1563936078]
-position = Vector2(0, -6)
+position = Vector2(0, -5)
 shape = SubResource("RectangleShape2D_rst2x")
 
 [node name="TagComponent" type="Node" parent="." unique_id=105230965]

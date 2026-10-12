@@ -10,8 +10,6 @@ enum State{
 
 const KNOCKBACK_AMOUNT := 512.0
 
-var pending_damage: Damage
-
 @onready var wall_checker: RayCast2D = $Graphics/WallChecker
 @onready var player_checker: RayCast2D = $Graphics/PlayerChecker
 @onready var floor_checker: RayCast2D = $Graphics/FloorChecker
@@ -117,6 +115,4 @@ func transition_state(from:State, to:State) -> void:
 
 
 func _on_hurtbox_hurt(hitbox: Hitbox) -> void:
-	pending_damage = Damage.new()
-	pending_damage.amount = 1
-	pending_damage.source = hitbox.owner
+	apply_damage(1, hitbox.owner)

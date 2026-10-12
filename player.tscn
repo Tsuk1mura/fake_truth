@@ -16,10 +16,13 @@ size = Vector2(12, 15)
 size = Vector2(12, 8)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_dw050"]
-size = Vector2(4, 9)
+size = Vector2(6, 13)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_onrkg"]
 size = Vector2(12, 16)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_grab"]
+radius = 18.0
 
 [sub_resource type="Animation" id="Animation_i3pqv"]
 length = 0.001
@@ -98,7 +101,6 @@ tracks/5/keys = {
 
 [sub_resource type="Animation" id="Animation_onrkg"]
 resource_name = "death"
-length = 0.4
 step = 0.1
 tracks/0/type = "value"
 tracks/0/imported = false
@@ -167,7 +169,7 @@ tracks/5/path = NodePath(".")
 tracks/5/interp = 1
 tracks/5/loop_wrap = true
 tracks/5/keys = {
-"times": PackedFloat32Array(0.4),
+"times": PackedFloat32Array(1),
 "transitions": PackedFloat32Array(1),
 "values": [{
 "args": [],
@@ -825,7 +827,7 @@ _data = {
 
 [node name="Player" type="CharacterBody2D" unique_id=2070392852]
 collision_layer = 4
-collision_mask = 785
+collision_mask = 1281
 script = ExtResource("1_onrkg")
 
 [node name="Graphics" type="Node2D" parent="." unique_id=613618745]
@@ -843,6 +845,14 @@ collision_mask = 0
 script = ExtResource("3_sweqy")
 metadata/_custom_type_script = "uid://dhdc2o6fa8rpq"
 
+[node name="TagComponent" type="Node" parent="Graphics/Hurtbox" unique_id=972200001]
+script = ExtResource("3_i3pqv")
+metadata/_custom_type_script = "uid://n7g28og8ulv3"
+
+[node name="BodyMasker" type="Node" parent="Graphics/Hurtbox" unique_id=972200002]
+script = ExtResource("8_dw050")
+metadata/_custom_type_script = "uid://dwpgmqirqc4rs"
+
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Graphics/Hurtbox" unique_id=1086661486]
 visible = false
 position = Vector2(1, -7.5)
@@ -850,7 +860,7 @@ shape = SubResource("RectangleShape2D_sweqy")
 
 [node name="Hitbox" type="Area2D" parent="Graphics" unique_id=1513210453]
 collision_layer = 0
-collision_mask = 32
+collision_mask = 4096
 script = ExtResource("4_2hs0m")
 metadata/_custom_type_script = "uid://c6ywjhcgpbkyq"
 
@@ -862,11 +872,38 @@ disabled = true
 
 [node name="PushArea" type="Area2D" parent="Graphics" unique_id=1787151046]
 collision_layer = 0
-collision_mask = 768
+collision_mask = 3840
+
+[node name="TagComponent" type="Node" parent="Graphics/PushArea" unique_id=972200005]
+script = ExtResource("3_i3pqv")
+metadata/_custom_type_script = "uid://n7g28og8ulv3"
+
+[node name="BodyMasker" type="Node" parent="Graphics/PushArea" unique_id=972200006]
+script = ExtResource("8_dw050")
+metadata/_custom_type_script = "uid://dwpgmqirqc4rs"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Graphics/PushArea" unique_id=1507084645]
-position = Vector2(7, -4.5)
+position = Vector2(7, -6.5)
 shape = SubResource("RectangleShape2D_dw050")
+
+[node name="GrabArea" type="Area2D" parent="Graphics" unique_id=1787151047]
+collision_layer = 0
+collision_mask = 768
+
+[node name="TagComponent" type="Node" parent="Graphics/GrabArea" unique_id=972200011]
+script = ExtResource("3_i3pqv")
+metadata/_custom_type_script = "uid://n7g28og8ulv3"
+
+[node name="BodyMasker" type="Node" parent="Graphics/GrabArea" unique_id=972200012]
+script = ExtResource("8_dw050")
+metadata/_custom_type_script = "uid://dwpgmqirqc4rs"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Graphics/GrabArea" unique_id=1507084646]
+position = Vector2(0, -8)
+shape = SubResource("CircleShape2D_grab")
+
+[node name="Hand" type="Node2D" parent="Graphics" unique_id=613618746]
+position = Vector2(20, -8)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=623115712]
 visible = false

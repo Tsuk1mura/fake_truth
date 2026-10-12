@@ -17,6 +17,9 @@ enum Direction {
 
 var default_gravity := ProjectSettings.get("physics/2d/default_gravity") as float
 
+var pending_damage: Damage
+var _push_speed := 0.0   # 被推的残余速度（生物没有刚体惯性，用它表达"被顶了一下"）
+
 @onready var graphics: Node2D = $Graphics
 @onready var state_machine: StateMachine = $StateMachine
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
@@ -24,11 +27,15 @@ var default_gravity := ProjectSettings.get("physics/2d/default_gravity") as floa
 @onready var tags: TagComponent = $TagComponent
 
 
-## 敌人的碰撞层/掩码在 enemy.tscn 里手配（layer 16 RealEnemy / mask 3），
-## 故意不挂 BodyMasker：BodyMasker 会在找不到身份标签时改写碰撞，
-## 而敌人的身份永远不变，不需要那套动态机制。
+## 身份标签是唯一事实来源：BodyMasker 会据此自动设置碰撞层、
+## 决定它属于哪个世界、以及不在当前世界时是否可见/冻结。
 func _ready() -> void:
-	tags.add_tag("real_alive")   # ★ 让地刺能对所有"活着的现实生物"生效
+	tags.add_tag("real_enemy")
+	tags.add_tag("real_alive")   # 地刺靠它把敌人也算作"活着的现实生物"
+
+	# 受击盒声明身份，不需要在这里碰任何碰撞层数字
+	var eb_tags: TagComponent = $Graphics/Hurtbox/TagComponent
+	eb_tags.add_tag("enemy_hurtbox")
 
 
 
@@ -36,8 +43,26 @@ func move(speed: float, delta: float) -> void:
 	velocity.x = move_toward(velocity.x,direction * speed,acceleration * delta) #有加速度的移动有
 	velocity.y +=default_gravity * delta	
 	
+	# 被推的残余速度叠在 AI 速度之上，并逐帧衰减：贴着持续推才顶得动，离开推力源就慢慢停。
+	velocity.x += _push_speed
+	_push_speed *= 0.8
+
 	move_and_slide()
 
+
+
+## 被推：把外部水平冲量折算成残余速度。CharacterBody2D 没有刚体惯性，
+## 所以这里用一个会衰减的量，让"顶一下"有手感，又不会和 AI 自己的速度打架。
+func push(impulse: Vector2) -> void:
+	_push_speed += impulse.x
+
+
+## 统一的受伤入口：和玩家一致，只记录 pending_damage，
+## 真正的扣血、击飞、死亡动画由子类状态机在 HURT/DYING 里处理。
+func apply_damage(amount: int, source: Node2D) -> void:
+	pending_damage = Damage.new()
+	pending_damage.amount = amount
+	pending_damage.source = source
 
 
 func die() -> void:
