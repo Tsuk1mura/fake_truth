@@ -1,6 +1,11 @@
 class_name Player
 extends CharacterBody2D
 
+enum Direction {
+	LEFT = -1,
+	RIGHT = +1
+}
+
 enum State {
 	IDLE,
 	RUNNING,
@@ -20,21 +25,32 @@ const FLOOR_ACCELERATION =RUN_SPEED / 0.2 #地面加速度
 const AIR_ACCELERATION =RUN_SPEED / 0.02 #空中加速度
 const JUMP_VELOCITY := -300.0 #跳跃量
 const KNOCKBACK_AMOUNT := 512.0 #击飞
-const CORPSE_SCENE := preload("res://corpse.tscn")
+const CORPSE_SCENE := preload("res://corpses/corpse_of_player.tscn")
 const DEAD_TINT := Color(0.0, 81.0 / 255.0, 1.0, 1.0)
 const ALIVE_TINT := Color.WHITE
-const PUSH_GAIN := 3.0        # 推力增益：意图速度 × 这个系数
+const PUSH_GAIN := 4.0        # 推力增益：意图速度 × 这个系数
+
+@export var direction := Direction.RIGHT:
+	set(v):
+		direction = v
+		if not is_node_ready():
+			await ready
+		graphics.scale.x = direction
 
 var default_gravity := ProjectSettings.get("physics/2d/default_gravity") as float
 var is_first_tick := false
 var pending_damage: Damage
 var _is_dead := false
+var _fell_too_long := false   # 本次坠落是否已超过 6 秒（FallTimer 超时置位）
+var _crushing_count := 0      # 挤压感应区里当前压着我的物体数量
 var held_item: Node2D = null   # 手里拿着的可扔物品（null = 空手）
+var interacting_with: Array[Interactable]
+var interacting_of_death_with: Array[InteractableOfDeath]
 
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
 @onready var coyote_timer: Timer = $CoyoteTimer #郊狼时间
 @onready var jump_request_timer: Timer = $JumpRequestTimer #跳跃预输入
-@onready var stats: Stats = $Stats
+@onready var stats: Stats = Game.player_stats
 @onready var graphics: Node2D = $Graphics
 @onready var invincible_timer: Timer = $InvincibleTimer
 @onready var state_machine: StateMachine = $StateMachine
@@ -42,10 +58,16 @@ var held_item: Node2D = null   # 手里拿着的可扔物品（null = 空手）
 @onready var push_area: Area2D = $Graphics/PushArea
 @onready var grab_area: Area2D = $Graphics/GrabArea   # 拾取感应区
 @onready var hand: Node2D = $Graphics/Hand            # 手的位置，拿东西挂这里
+@onready var interaction_icon: AnimatedSprite2D = $InteractionIcon
+@onready var fall_timer: Timer = $FallTimer             # 坠落计时：FALL 超 6 秒落地即死
+@onready var crush_timer: Timer = $CrushTimer           # 挤压计时：被压满 3 秒即死
+@onready var crush_area: Area2D = $Graphics/CrushArea   # 挤压感应区（头顶 + 躯干）
 
 func _ready() -> void:
 	tags.add_tag("real_player")
 	tags.add_tag("real_alive")
+	
+	
 
 	# 判定盒各自有身份标签，BodyMasker 会据此管理它们的碰撞层和世界可见性。
 	# 受击盒跟着玩家形态走：灵魂态时切到 dead_hurtbox（只有灵魂世界能打到我）。
@@ -60,7 +82,15 @@ func _ready() -> void:
 	# 拾取感应区：只感应"物品"（item_sensor），谁有 grab() 谁就能被捡。
 	(grab_area.get_node("TagComponent") as TagComponent).add_tag("item_sensor")
 
+	# 挤压感应区：检测压在头顶 / 卡在体内的东西（石子、尸体、墙）。
+	(crush_area.get_node("TagComponent") as TagComponent).add_tag("real_crush")
+
 	push_area.body_entered.connect(_on_push_body_entered)
+
+	crush_area.body_entered.connect(_on_crush_body_entered)
+	crush_area.body_exited.connect(_on_crush_body_exited)
+	fall_timer.timeout.connect(_on_fall_timeout)
+	crush_timer.timeout.connect(_on_crush_timeout)
 
 
 func _on_push_body_entered(body: Node2D) -> void:
@@ -85,12 +115,12 @@ func apply_push(body: Node2D, delta: float) -> void:
 	# ★ 推的驱动力是"意图方向"（玩家想往哪走），不是"实际速度"。
 	#   撞上物体时 move_and_slide 会把 velocity.x 清零，
 	#   用实际速度判断会得出"被挡着→速度为零→没推力"的错误结论。
-	var direction := Input.get_axis("move_left", "move_right")
-	if is_zero_approx(direction):
+	var movement := Input.get_axis("move_left", "move_right")
+	if is_zero_approx(movement):
 		return          # 站着不动就没有推力（这是设计，不是缺陷）
 
-	# direction 自带正负号，力的方向自动正确，不需要算"谁在左边"
-	var force := direction * RUN_SPEED * PUSH_GAIN * delta
+	# movement 自带正负号，力的方向自动正确，不需要算"谁在左边"
+	var force := movement * RUN_SPEED * PUSH_GAIN * delta
 
 	# ★ 唯一规则：谁有 push() 谁就能被推，不判断它是什么类型。
 	#   刚体（尸体/箱子）在自己的 push() 里叫醒 + apply_central_impulse；
@@ -139,8 +169,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_throw_held_item()
 		else:
 			_try_grab()
+	if event.is_action_pressed("interact") and interacting_with:
+		interacting_with.back().interact()
+	if event.is_action_pressed("interact") and interacting_of_death_with:
+		interacting_of_death_with.back().interact()
 
 func tick_physics(state:State, delta: float) -> void: #每帧做的事
+	interaction_icon.visible = not interacting_with.is_empty() or not interacting_of_death_with.is_empty()
+	
 	if invincible_timer.time_left > 0:
 		graphics.modulate.a = sin(Time.get_ticks_msec() / 20.0) * 0.5 + 0.5
 	else:
@@ -177,13 +213,13 @@ func tick_physics(state:State, delta: float) -> void: #每帧做的事
 
 
 func move(gravity:float,delta: float) ->void:	 #移动
-	var direction := Input.get_axis("move_left","move_right")
+	var movement := Input.get_axis("move_left","move_right")
 	var acceleration = FLOOR_ACCELERATION if is_on_floor() else AIR_ACCELERATION
-	velocity.x = move_toward(velocity.x,direction * RUN_SPEED,acceleration * delta) #有加速度的移动有
+	velocity.x = move_toward(velocity.x,movement * RUN_SPEED,acceleration * delta) #有加速度的移动有
 	velocity.y +=gravity * delta	
 	
-	if not is_zero_approx(direction):
-		graphics.scale.x = -1 if direction <  0 else 1
+	if not is_zero_approx(movement):
+		direction = Direction.LEFT if movement <  0 else Direction.RIGHT
 	
 	move_and_slide()
 
@@ -208,13 +244,16 @@ func _first_death() -> void:
 	_drop_held_item()   # 死的时候手里东西先掉回世界，不跟着进灵魂
 	_spawn_corpse()
 	_enter_dead_form()
-	stats.reset()                                  
+	stats.reset()
 	pending_damage = null
-	invincible_timer.start()                   
-	state_machine.current_state = State.DEAD 
+	fall_timer.stop()
+	crush_timer.stop()
+	_crushing_count = 0
+	invincible_timer.start()
+	state_machine.current_state = State.DEAD
 
 func _true_death() -> void:
-	GameState.reset()
+	Game.reset()
 	get_tree().reload_current_scene()
 
 func _spawn_corpse() -> void:
@@ -244,7 +283,11 @@ func _enter_dead_form() -> void:
 	hb_tags.remove_tag("real_hurtbox")
 	hb_tags.add_tag("dead_hurtbox")
 
-	GameState.set_world(GameState.World.VIRTUAL)
+	var crush_tags: TagComponent = $Graphics/CrushArea/TagComponent
+	crush_tags.remove_tag("real_crush")
+	crush_tags.add_tag("dead_crush")
+
+	Game.set_world(Game.World.VIRTUAL)
 
 ## 当前形态的"闲置态"是哪个
 func _idle_state() -> int:
@@ -268,8 +311,8 @@ func get_next_state(state: State) -> int: #输入改变
 	if state in GROUND_STATE and not is_on_floor():
 		return State.FALL
 	
-	var direction := Input.get_axis("move_left","move_right")
-	var is_still := is_zero_approx(direction) and is_zero_approx(velocity.x)
+	var movement := Input.get_axis("move_left","move_right")
+	var is_still := is_zero_approx(movement) and is_zero_approx(velocity.x)
 	match state:
 		State.DEAD:
 			if not is_still:
@@ -337,11 +380,16 @@ func transition_state(from:State, to:State) -> void: #状态改变：from，to
 		
 		State.FALL:
 			animation_player.play("fall")
+			_fell_too_long = false
+			fall_timer.start()   # 从这一刻开始算"坠落了多久"
 			if from in GROUND_STATE:
 				coyote_timer.start()
 		
 		State.LANDING:
 			animation_player.play("landing")
+			fall_timer.stop()
+			if _fell_too_long:
+				apply_damage(stats.max_health, self)   # 摔落超过 6 秒：落地即秒杀
 			
 		State.KICK:
 			animation_player.play("kick1")
@@ -360,6 +408,7 @@ func transition_state(from:State, to:State) -> void: #状态改变：from，to
 		State.DYING:
 			animation_player.play("dead")
 			invincible_timer.stop()
+			interacting_with.clear()
 		
 		State.DEAD:
 			animation_player.play("idle")  
@@ -383,6 +432,31 @@ func _on_hurtbox_hurt(hitbox: Hitbox) -> void:
 	apply_damage(1, hitbox.owner)
 
 
+# ---- 坠落 / 挤压：两种"环境致死"，都和地刺一样走 apply_damage(max_health) 秒杀通道 ----
+
+## 挤压：感应区里一有东西压着（石子/尸体/墙），计时器就开始走；东西一离开就清零。
+## 连续压满 3 秒 -> _on_crush_timeout -> 秒杀。
+func _on_crush_body_entered(_body: Node2D) -> void:
+	_crushing_count += 1
+	if not _is_dead and crush_timer.is_stopped():
+		crush_timer.start()
+
+func _on_crush_body_exited(_body: Node2D) -> void:
+	_crushing_count = maxi(_crushing_count - 1, 0)
+	if _crushing_count == 0:
+		crush_timer.stop()
+
+func _on_crush_timeout() -> void:
+	if _is_dead:
+		return
+	apply_damage(stats.max_health, self)
+
+## 坠落：进入 FALL 时启动 6 秒 FallTimer，超时置位 _fell_too_long；
+## LANDING 时若已超时，由 transition_state 落地即秒杀。
+func _on_fall_timeout() -> void:
+	_fell_too_long = true
+
+
 #复活函数
 func revive_at(pos: Vector2 = global_position) -> void:
 	# 1) 只有死亡形态才需要复活
@@ -398,6 +472,10 @@ func revive_at(pos: Vector2 = global_position) -> void:
 	hb_tags.remove_tag("dead_hurtbox")
 	hb_tags.add_tag("real_hurtbox")
 
+	var crush_tags: TagComponent = $Graphics/CrushArea/TagComponent
+	crush_tags.remove_tag("dead_crush")
+	crush_tags.add_tag("real_crush")
+
 	# 3) 恢复视觉
 	var t := graphics.modulate
 	graphics.modulate = Color(ALIVE_TINT.r, ALIVE_TINT.g, ALIVE_TINT.b, t.a)
@@ -411,12 +489,34 @@ func revive_at(pos: Vector2 = global_position) -> void:
 
 	# 6) 清掉残留状态
 	pending_damage = null
+	_fell_too_long = false
+	_crushing_count = 0
 	invincible_timer.start()             # 复活后给一段无敌
 
 	# 7) 回实类世界
-	GameState.set_world(GameState.World.REAL)
+	Game.set_world(Game.World.REAL)
 
 	# 8) 解除锁 + 强制切闲置态
 	#    注意顺序：_is_dead 必须先清，否则 current_state 的赋值会被 get_next_state 的锁挡住
 	_is_dead = false
 	state_machine.current_state = State.IDLE
+
+func register_interactable(v: Interactable) -> void:
+	if state_machine.current_state == State.DYING:
+		return
+	if v in interacting_with:
+		return
+	interacting_with.append(v)
+
+func unregister_interactable(v: Interactable) -> void:
+	interacting_with.erase(v)
+
+func register_interactable_of_death(v: InteractableOfDeath) -> void:
+	if state_machine.current_state == State.DYING:
+		return
+	if v in interacting_of_death_with:
+		return
+	interacting_of_death_with.append(v)
+
+func unregister_interactable_of_death(v: InteractableOfDeath) -> void:
+	interacting_of_death_with.erase(v)

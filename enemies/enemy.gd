@@ -37,6 +37,10 @@ func _ready() -> void:
 	var eb_tags: TagComponent = $Graphics/Hurtbox/TagComponent
 	eb_tags.add_tag("enemy_hurtbox")
 
+	# 攻击盒声明身份：检测同世界玩家的受击盒（死后由子类切到 dead_enemy_attack）
+	var atk_tags: TagComponent = $Graphics/Hitbox/TagComponent
+	atk_tags.add_tag("enemy_attack")
+
 
 
 func move(speed: float, delta: float) -> void:
@@ -63,7 +67,3 @@ func apply_damage(amount: int, source: Node2D) -> void:
 	pending_damage = Damage.new()
 	pending_damage.amount = amount
 	pending_damage.source = source
-
-
-func die() -> void:
-	queue_free()

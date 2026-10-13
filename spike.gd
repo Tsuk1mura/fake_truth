@@ -25,7 +25,9 @@ func _on_body_entered(body: Node2D) -> void:
 	# 地刺和 hitbox 走同一条受伤通道：apply_damage 只记录 pending_damage，
 	# 扣血、受伤/死亡动画由对方自己的状态机在 HURT/DYING 里播放。
 	# 伤害 = 目标最大生命值，等效秒杀 —— 但"先播死亡动画、再变灵魂态"的顺序被保留。
-	var stats := body.get_node_or_null("Stats")
+	# 玩家的 Stats 挂在 Game 全局节点下（跨场景保留血量），小怪的 Stats 是自己的子节点。
+	# 注意：`== Player` 是拿实例和类比较、永远为 false，判类型要用 `is Player`。
+	var stats: Stats = Game.player_stats if body is Player else body.get_node_or_null("Stats") as Stats
 	if stats == null:
 		return
 	if body.has_method("apply_damage"):

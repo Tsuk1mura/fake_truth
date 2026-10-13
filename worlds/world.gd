@@ -13,7 +13,7 @@ extends Node2D
 
 func _ready() -> void:
 	# 复活点 = 主角出生位置。子节点先于父节点 _ready，这里读到的就是最终出生坐标。
-	GameState.spawn_position = player.global_position
+	Game.spawn_position = player.global_position
 
 	# 摄像机范围取两张地图的并集
 	var used := real_tilemap.get_used_rect().merge(virtual_tilemap.get_used_rect())
@@ -25,12 +25,18 @@ func _ready() -> void:
 	camera_2d.limit_bottom = used.end.y * tile_size.y
 	camera_2d.reset_smoothing()
 
-	GameState.world_changed.connect(_on_world_changed)
-	_on_world_changed(GameState.current_world)
+	Game.world_changed.connect(_on_world_changed)
+	_on_world_changed(Game.current_world)
 
 func _on_world_changed(world: int) -> void:
-	var is_real := world == GameState.World.REAL
+	var is_real := world == Game.World.REAL
 	real_tilemap.visible = is_real
 	virtual_tilemap.visible = not is_real
 	# 碰撞不用管：环境地图的 mask 只含自己世界的层，
 	# 所以另一世界的东西本来就撞不到它。
+
+func update_player(pos: Vector2, direction: Player.Direction) -> void:
+	player.global_position = pos
+	player.direction = direction
+	camera_2d.reset_smoothing()
+	camera_2d.force_update_scroll()

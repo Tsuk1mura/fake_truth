@@ -53,10 +53,17 @@ const PROFILES := {
 	# ---- 判定盒：不参与世界切换 ----
 	# 敌人的受击盒：永远挂在 EnemyHurtbox 层，由同世界玩家的 Hitbox 检测
 	"enemy_hurtbox": { "layer": 4096, "mask": 0,    "world": World.REAL },
+	# 敌人的攻击盒：检测同世界玩家的受击盒（real -> real_hurtbox 层16，dead -> dead_hurtbox 层32）
+	"enemy_attack":      { "layer": 0, "mask": 16,   "world": World.REAL },
+	"dead_enemy_attack": { "layer": 0, "mask": 32,   "world": World.DEATH },
 	# 推动感应区（玩家的 PushArea）：自己不是物品，只负责"检测同世界可推动的东西"
 	"body_sensor":   { "layer": 0,    "mask": 3840, "world": World.REAL },  # 256+512+1024+2048（物品+生物）
 	# 拾取感应区（玩家的 GrabArea）：只检测"物品"，不检测生物
 	"item_sensor":   { "layer": 0,    "mask": 768,  "world": World.REAL },  # 256+512（real_body+dead_body）
+	# 挤压感应区（玩家的 CrushArea）：检测"压在身上 / 把自己卡住"的东西。
+	# 同世界的物品(real_body 256) + 环境(real_tile 1) —— 石子、尸体、墙/天花板。
+	"real_crush":    { "layer": 0,    "mask": 257,  "world": World.REAL },
+	"dead_crush":    { "layer": 0,    "mask": 514,  "world": World.DEATH },
 }
 
 ## 优先级：一个物体同时有多个标签时，排在前面的赢
@@ -67,7 +74,8 @@ const IDENTITY_PRIORITY := [
 	"dead_sensor", "real_sensor",
 	"dead_tile", "real_tile",
 	"dead_hurtbox", "real_hurtbox",
-	"enemy_hurtbox", "body_sensor", "item_sensor",
+	"enemy_hurtbox", "enemy_attack", "dead_enemy_attack", "body_sensor", "item_sensor",
+	"dead_crush", "real_crush",
 ]
 
 @export var tag_component_path: NodePath = ^"../TagComponent"
@@ -88,7 +96,7 @@ func _ready() -> void:
 		push_error("BodyMasker 找不到 TagComponent: %s" % tag_component_path)
 		return
 
-	GameState.world_changed.connect(_on_world_changed)
+	Game.world_changed.connect(_on_world_changed)
 	_tags.tags_changed.connect(_on_tags_changed)
 	_queue_refresh()
 
@@ -146,7 +154,7 @@ func refresh() -> void:
 ##   不属于当前世界的东西 —— 不可见、物理冻结、不再被任何东西检测到。
 ##   不需要给"小怪看不见灵魂态玩家"这种需求写任何专门的代码。
 func _apply_world(world: int) -> void:
-	var here: bool = world == GameState.current_world
+	var here: bool = world == Game.current_world
 
 	# 可见性：Node2D / CanvasItem 才有
 	if _body is CanvasItem:
