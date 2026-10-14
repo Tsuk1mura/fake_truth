@@ -16,8 +16,15 @@ extends Button
 ## 视觉规格（单位 = 逻辑像素，384x216 画布）：
 ##   1px 外框  |  1px 斜面（上/左受光，下/右背光）  |  填充
 ## 按下时斜面反转 + 填充换亮色，做出"按进去"的手感。
+##
+## 聚焦指示三角也画在这里：画在按钮矩形**之外**（局部 x 为负）。
+## Control 默认不裁剪自绘内容，所以开始菜单和暂停菜单都能白拿这个指示器，
+## 不用各自实现一份。
 
 const PX := 1.0
+const MARKER_COLOR := Color("7fe8e4")
+
+@export var show_focus_marker := true
 
 @export var fill_normal := Color("0c2626")
 @export var fill_hot := Color("14403f")
@@ -127,3 +134,10 @@ func _draw() -> void:
 
 	# 3) 填充
 	draw_rect(Rect2(ix + PX, iy + PX, iw - PX * 2.0, ih - PX * 2.0), fill)
+
+	# 4) 聚焦指示：按钮左侧的 4x7 像素右三角，行宽 1/2/3/4/3/2/1
+	if show_focus_marker and has_focus():
+		var my := floorf(h * 0.5) - 3.0
+		for row in 7:
+			var mw := 4.0 - absf(float(row) - 3.0)
+			draw_rect(Rect2(-11.0, my + float(row), mw, 1.0), MARKER_COLOR)

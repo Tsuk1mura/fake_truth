@@ -2,18 +2,8 @@
 
 [ext_resource type="Script" path="res://ui/main_menu.gd" id="1_menu"]
 [ext_resource type="Script" path="res://ui/PixelButton.gd" id="2_pixbtn"]
-
-[sub_resource type="SystemFont" id="SystemFont_title"]
-font_names = PackedStringArray("SimHei", "黑体", "Microsoft YaHei")
-antialiasing = 0
-subpixel_positioning = 0
-hinting = 1
-
-[sub_resource type="SystemFont" id="SystemFont_body"]
-font_names = PackedStringArray("SimSun", "NSimSun", "宋体")
-antialiasing = 0
-subpixel_positioning = 0
-hinting = 1
+[ext_resource type="SystemFont" path="res://ui/fonts/pixel_title.tres" id="3_font_title"]
+[ext_resource type="SystemFont" path="res://ui/fonts/pixel_body.tres" id="4_font_body"]
 
 [node name="MainMenu" type="Control"]
 anchor_right = 1.0
@@ -34,7 +24,7 @@ theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 3
 theme_override_constants/shadow_outline_size = 0
 theme_override_font_sizes/font_size = 34
-theme_override_fonts/font = SubResource("SystemFont_title")
+theme_override_fonts/font = ExtResource("3_font_title")
 text = "实虚之间"
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -45,7 +35,7 @@ offset_right = 384.0
 offset_bottom = 82.0
 theme_override_colors/font_color = Color(0.361, 0.604, 0.627, 1)
 theme_override_font_sizes/font_size = 11
-theme_override_fonts/font = SubResource("SystemFont_body")
+theme_override_fonts/font = ExtResource("4_font_body")
 text = "FAKE TRUTH"
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -72,7 +62,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.812, 0.937, 0.925, 1)
 theme_override_font_sizes/font_size = 14
-theme_override_fonts/font = SubResource("SystemFont_title")
+theme_override_fonts/font = ExtResource("3_font_title")
 text = "开始游戏"
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -92,7 +82,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.812, 0.937, 0.925, 1)
 theme_override_font_sizes/font_size = 14
-theme_override_fonts/font = SubResource("SystemFont_title")
+theme_override_fonts/font = ExtResource("3_font_title")
 text = "退出游戏"
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -103,7 +93,7 @@ offset_right = 384.0
 offset_bottom = 206.0
 theme_override_colors/font_color = Color(0.298, 0.478, 0.502, 1)
 theme_override_font_sizes/font_size = 11
-theme_override_fonts/font = SubResource("SystemFont_body")
+theme_override_fonts/font = ExtResource("4_font_body")
 text = "↑↓ 选择    Enter 确认"
 horizontal_alignment = 1
 vertical_alignment = 1
