@@ -12,6 +12,10 @@ extends Node2D
 @onready var player: CharacterBody2D = $Player
 
 func _ready() -> void:
+	# 声明"本场景可以被 ESC 暂停"。PauseMenu（autoload）只对带这个组的
+	# 场景响应 ESC，所以开始菜单里按 ESC 不会弹出暂停菜单。
+	add_to_group("pausable_scene")
+
 	# 复活点 = 主角出生位置。子节点先于父节点 _ready，这里读到的就是最终出生坐标。
 	Game.spawn_position = player.global_position
 
